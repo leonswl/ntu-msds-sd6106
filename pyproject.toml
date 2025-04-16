@@ -1,0 +1,107 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flowertune-llm"
+version = "1.0.0"
+description = "FlowerTune LLM: Federated LLM Fine-tuning with Flower"
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]==1.11.1",
+    "flwr-datasets>=0.3.0",
+    "trl==0.8.1",
+    "bitsandbytes==0.43.0",
+    "scipy==1.13.0",
+    "peft==0.6.2",
+    "fschat[model_worker,webui]==0.2.35",
+    "transformers==4.39.3",
+    "sentencepiece==0.2.0",
+    "omegaconf==2.3.0",
+    "hf_transfer==0.1.8",
+    "rouge_score==0.1.2",
+    "evaluate==0.4.3",
+    "transformers==4.39.3"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
+[tool.flwr.app]
+publisher = "flwrlabs"
+
+[tool.flwr.app.components]
+serverapp = "flowertune_llm.server_app:app"
+clientapp = "flowertune_llm.client_app:app"
+
+# arguments to adjust for local testing: seq-length, per-device-train-batch-size, max-steps
+
+[tool.flwr.app.config]
+dataset.name = "4DR1455/finance_questions"
+##### MODEL #####
+model.name = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+# model.name = "google-t5/t5-base"
+# model.name = "google-t5/t5-small"
+model.quantization = 8
+model.gradient-checkpointing = true
+model.lora.peft-lora-r = 16
+model.lora.peft-lora-alpha = 32
+##### TRAIN #####
+train.save-every-round = 1 
+train.learning-rate-max = 5e-5
+train.learning-rate-min = 1e-6
+train.seq-length = 512
+# train.seq-length = 1024
+##### TRAINING ARGUMENTS #####
+train.training-arguments.output-dir = "outputs"
+train.training-arguments.learning-rate = 1e-4
+train.training-arguments.auto-find-batch-size = true
+train.training-arguments.per-device-train-batch-size = 64
+train.training-arguments.gradient-accumulation-steps = 4
+# train.training-arguments.fp16 = true
+# train.training-arguments.tf32 = true # if using A100 GPU
+train.training-arguments.bf16 = true # if using A100 GPU
+train.training-arguments.optim="adafactor"
+train.training-arguments.warmup-steps = 50
+train.training-arguments.logging-steps = 50
+# train.training-arguments.max-steps = 5 # let step be determined by data size (or 1000-5000 steps for initial fine-tuning)
+train.training-arguments.num-train-epochs = 3
+train.training-arguments.save-steps = 50
+# train.training-arguments.save-total-limit = 10
+train.training-arguments.lr-scheduler-type = "cosine"
+# train.training-arguments.gradient-checkpointing = true
+train.training-arguments.per-device-eval-batch-size = 32
+train.training-arguments.eval-steps = 50
+# train.training-arguments.eval-accumulation-steps = 4
+train.training-arguments.evaluation-strategy = "steps"  # Or "steps" with a larger interval
+train.training-arguments.report-to = "wandb" 
+train.training-arguments.load-best-model-at-end = true
+train.training-arguments.metric-for-best-model = "eval_loss"
+# train.training-arguments.run-name = "Flowertune-Google-T5-Small-v1.0"
+train.training-arguments.save-safetensors = true
+# train.training-arguments.label-names = "labels"
+train.training-arguments.max-seq-length=512
+train.training-arguments.packing=false
+##### FEDERATED LEARNING STRATEGIES #####
+strategy.fraction-fit = 1
+# strategy.fraction-evaluate = 0.6
+strategy.name = 'fedavg'
+# strategy.name = 'fedprox'
+# strategy.name = 'fedadagrad'
+# strategy.name = 'fedavgm'
+# strategy.name = 'fedadam'
+strategy.proximal-mu = 0.01 # fedprox proximal term
+strategy.server-momentum = 0.5 #fedavgm momentum
+strategy.eta = 1e-2 # set global learning rate
+strategy.tau = 1e-3 # set regularization
+num-server-rounds = 3
+##### EVALUATION #####
+eval.batch-size = 8
+
+[tool.flwr.federations]
+default = "local-simulation"
+
+[tool.flwr.federations.local-simulation]
+options.num-supernodes = 3
+options.backend.client-resources.num-cpus = 4
+options.backend.client-resources.num-gpus = 1
